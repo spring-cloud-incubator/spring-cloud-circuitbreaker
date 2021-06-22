@@ -17,10 +17,13 @@
 package org.springframework.cloud.circuitbreaker.resilience4j;
 
 import java.time.Duration;
+import java.util.Optional;
 
 import io.github.resilience4j.bulkhead.BulkheadRegistry;
 import io.github.resilience4j.bulkhead.ThreadPoolBulkheadRegistry;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.timelimiter.TimeLimiter;
 import io.github.resilience4j.timelimiter.TimeLimiterRegistry;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -35,6 +38,7 @@ import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 /**
  * @author Andrii Bohutskyi
+ * @author 荒
  */
 @RunWith(SpringRunner.class)
 @SpringBootTest(classes = Resilience4JAutoConfigurationPropertyTest.class)
@@ -114,4 +118,56 @@ public class Resilience4JAutoConfigurationPropertyTest {
 				.getMaxThreadPoolSize()).isEqualTo(50);
 	}
 
+	@Test
+	public void testTestGroupCircuitBreakerPropertiesPopulated() {
+		factory.create("a_in_test_group", "test_group").run(() -> "result");
+		CircuitBreakerRegistry circuitBreakerRegistry = factory.getCircuitBreakerRegistry();
+		Optional<CircuitBreaker> circuitBreaker = circuitBreakerRegistry.find("a_in_test_group");
+		assertThat(circuitBreaker).isPresent();
+		assertThat(circuitBreaker.get().getCircuitBreakerConfig().getMinimumNumberOfCalls())
+				.isEqualTo(30);
+	}
+
+	@Test
+	public void testTestGroupTimeLimiterPropertiesPopulated() {
+		factory.create("a_in_test_group", "test_group").run(() -> "result");
+		TimeLimiterRegistry timeLimiterRegistry = factory.getTimeLimiterRegistry();
+		Optional<TimeLimiter> timeLimiter = timeLimiterRegistry.find("a_in_test_group");
+		assertThat(timeLimiter).isPresent();
+		assertThat(timeLimiter.get().getTimeLimiterConfig().getTimeoutDuration())
+				.isEqualTo(Duration.ofMillis(500));
+	}
+
+	@Test
+	public void testTestCircuitTimeLimiterPropertiesPopulated() {
+		factory.create("test_circuit", "test_group").run(() -> "result");
+		TimeLimiterRegistry timeLimiterRegistry = factory.getTimeLimiterRegistry();
+		Optional<TimeLimiter> timeLimiter = timeLimiterRegistry.find("test_circuit");
+		assertThat(timeLimiter).isPresent();
+		assertThat(timeLimiter.get().getTimeLimiterConfig().getTimeoutDuration())
+				.isEqualTo(Duration.ofSeconds(18));
+	}
+
+
+	@Test
+	public void testTestCircuitCircuitBreakerPropertiesPopulated() {
+		factory.create("test_circuit", "test_group").run(() -> "result");
+		CircuitBreakerRegistry circuitBreakerRegistry = factory.getCircuitBreakerRegistry();
+		Optional<CircuitBreaker> circuitBreaker = circuitBreakerRegistry.find("test_circuit");
+		assertThat(circuitBreaker).isPresent();
+		assertThat(circuitBreaker.get().getCircuitBreakerConfig().getMinimumNumberOfCalls())
+				.isEqualTo(5);
+	}
+
+
+	@Test
+	public void testTestGroupInstanceTimeLimiterPropertiesPopulated() {
+		factory.create("a_in_test_group_instance", "test_group_instance").run(() -> "result");
+		TimeLimiterRegistry timeLimiterRegistry = factory.getTimeLimiterRegistry();
+		assertThat(timeLimiterRegistry.find("a_in_test_group_instance")).isNotPresent();
+		Optional<TimeLimiter> timeLimiter = timeLimiterRegistry.find("test_group_instance");
+		assertThat(timeLimiter).isPresent();
+		assertThat(timeLimiter.get().getTimeLimiterConfig().getTimeoutDuration())
+				.isEqualTo(Duration.ofMillis(600));
+	}
 }

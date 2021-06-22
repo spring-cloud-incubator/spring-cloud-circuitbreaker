@@ -25,7 +25,9 @@ import java.util.concurrent.Executors;
 import java.util.function.Function;
 
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.timelimiter.TimeLimiterConfig;
 import io.github.resilience4j.timelimiter.TimeLimiterRegistry;
 
 import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
@@ -35,6 +37,7 @@ import org.springframework.util.Assert;
 /**
  * @author Ryan Baxter
  * @author Andrii Bohutskyi
+ * @author 荒
  */
 public class Resilience4JCircuitBreakerFactory extends
 		CircuitBreakerFactory<Resilience4JConfigBuilder.Resilience4JCircuitBreakerConfiguration, Resilience4JConfigBuilder> {
@@ -126,8 +129,12 @@ public class Resilience4JCircuitBreakerFactory extends
 			ExecutorService circuitBreakerExecutorService) {
 		Resilience4JConfigBuilder.Resilience4JCircuitBreakerConfiguration config = getConfigurations()
 				.computeIfAbsent(id, defaultConfiguration);
-		return new Resilience4JCircuitBreaker(id, groupName, config.getCircuitBreakerConfig(),
-				config.getTimeLimiterConfig(), circuitBreakerRegistry, timeLimiterRegistry,
+		CircuitBreakerConfig circuitBreakerConfig = this.circuitBreakerRegistry.getConfiguration(groupName)
+				.orElse(config.getCircuitBreakerConfig());
+		TimeLimiterConfig timeLimiterConfig = this.timeLimiterRegistry.getConfiguration(groupName)
+				.orElse(config.getTimeLimiterConfig());
+		return new Resilience4JCircuitBreaker(id, groupName, circuitBreakerConfig,
+				timeLimiterConfig, circuitBreakerRegistry, timeLimiterRegistry,
 				circuitBreakerExecutorService, Optional.ofNullable(circuitBreakerCustomizers.get(id)),
 				bulkheadProvider);
 	}
