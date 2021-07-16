@@ -35,6 +35,7 @@ import org.springframework.cloud.client.circuitbreaker.Customizer;
 /**
  * @author Ryan Baxter
  * @author Andrii Bohutskyi
+ * @author 荒
  */
 public class Resilience4JCircuitBreaker implements CircuitBreaker {
 
@@ -106,10 +107,12 @@ public class Resilience4JCircuitBreaker implements CircuitBreaker {
 	public <T> T run(Supplier<T> toRun, Function<Throwable, T> fallback) {
 		final io.vavr.collection.Map<String, String> tags = io.vavr.collection.HashMap.of(CIRCUIT_BREAKER_GROUP_TAG,
 				this.groupName);
-		TimeLimiter timeLimiter = timeLimiterRegistry.timeLimiter(id, timeLimiterConfig, tags);
+		TimeLimiter timeLimiter = this.timeLimiterRegistry.find(this.id)
+				.orElseGet(() -> this.timeLimiterRegistry.find(this.groupName)
+						.orElseGet(() -> this.timeLimiterRegistry.timeLimiter(this.id, this.timeLimiterConfig, tags)));
 		Supplier<Future<T>> futureSupplier = () -> executorService.submit(toRun::get);
 
-		Callable restrictedCall = TimeLimiter.decorateFutureSupplier(timeLimiter, futureSupplier);
+		Callable<T> restrictedCall = TimeLimiter.decorateFutureSupplier(timeLimiter, futureSupplier);
 		io.github.resilience4j.circuitbreaker.CircuitBreaker defaultCircuitBreaker = registry.circuitBreaker(this.id,
 				this.circuitBreakerConfig, tags);
 		circuitBreakerCustomizer.ifPresent(customizer -> customizer.customize(defaultCircuitBreaker));
