@@ -29,8 +29,12 @@ import io.github.resilience4j.timelimiter.TimeLimiterConfig;
 import io.github.resilience4j.timelimiter.TimeLimiterRegistry;
 import io.vavr.control.Try;
 
+import org.springframework.cloud.circuitbreaker.resilience4j.common.Resilience4JCircuitBreakerCompareAndGetter;
+import org.springframework.cloud.circuitbreaker.resilience4j.common.Resilience4JTimeLimiterCompareAndGetter;
 import org.springframework.cloud.client.circuitbreaker.CircuitBreaker;
 import org.springframework.cloud.client.circuitbreaker.Customizer;
+
+
 
 /**
  * @author Ryan Baxter
@@ -57,6 +61,10 @@ public class Resilience4JCircuitBreaker implements CircuitBreaker {
 	private final ExecutorService executorService;
 
 	private final Optional<Customizer<io.github.resilience4j.circuitbreaker.CircuitBreaker>> circuitBreakerCustomizer;
+
+	private final Resilience4JCircuitBreakerCompareAndGetter resilience4JCircuitBreakerCompareAndGetter = Resilience4JCircuitBreakerCompareAndGetter.getInstance();
+
+	private final Resilience4JTimeLimiterCompareAndGetter timeLimiterCompareAndGetter = Resilience4JTimeLimiterCompareAndGetter.getInstance();
 
 	@Deprecated
 	public Resilience4JCircuitBreaker(String id,
@@ -106,12 +114,12 @@ public class Resilience4JCircuitBreaker implements CircuitBreaker {
 	public <T> T run(Supplier<T> toRun, Function<Throwable, T> fallback) {
 		final io.vavr.collection.Map<String, String> tags = io.vavr.collection.HashMap.of(CIRCUIT_BREAKER_GROUP_TAG,
 				this.groupName);
-		TimeLimiter timeLimiter = timeLimiterRegistry.timeLimiter(id, timeLimiterConfig, tags);
+		TimeLimiter timeLimiter = timeLimiterCompareAndGetter.compareAndGet(id, timeLimiterRegistry, timeLimiterConfig, tags);
 		Supplier<Future<T>> futureSupplier = () -> executorService.submit(toRun::get);
 
 		Callable restrictedCall = TimeLimiter.decorateFutureSupplier(timeLimiter, futureSupplier);
-		io.github.resilience4j.circuitbreaker.CircuitBreaker defaultCircuitBreaker = registry.circuitBreaker(this.id,
-				this.circuitBreakerConfig, tags);
+		io.github.resilience4j.circuitbreaker.CircuitBreaker defaultCircuitBreaker =
+			resilience4JCircuitBreakerCompareAndGetter.compareAndGet(id, registry, circuitBreakerConfig, tags);
 		circuitBreakerCustomizer.ifPresent(customizer -> customizer.customize(defaultCircuitBreaker));
 
 		if (bulkheadProvider != null) {
